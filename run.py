@@ -212,7 +212,6 @@ while True:
         continue
     except TimeoutException:
         print("경고창이 없습니다.")
-        break
 
     ## 생년월일 입력.
     print("생년월일 입력")
