@@ -14,7 +14,58 @@ from datetime import datetime
 
 wait_sec = 60
 
+# 예매할 자리 수 (최대 2매)
+wanted_seats_count = 1
+
+# 인터파크 아이디 생년월일
+birth_date = ""
+
+# 결제할 카카오톡 정보
+# 핸드폰 번호
+kakao_phone_number = ""
+# 생년월일
+kakao_birth_date = ""
+
 driver = webdriver.Chrome()
+
+def alert_check():
+    global driver
+    # 경고창이 있는지 확인
+    try:
+        alert = driver.switch_to.alert
+        alert_text = alert.text  # 경고창의 내용을 가져옴
+        print("경고창 내용:", alert_text)
+        alert.accept()  # "확인" 버튼 클릭        
+        # 경고창이 존재하면 True 반환
+        is_alert_present = True
+    except NoAlertPresentException:
+        # 경고창이 존재하지 않으면 False 반환
+        is_alert_present = False
+    
+    return is_alert_present  
+
+def book_Delivery_check():
+    global driver
+    formBook = driver.find_elements(By.XPATH, "//form[@name='formBook']")
+    if formBook:
+        formBook[0].get_attribute("action")
+        action_value = formBook[0].get_attribute("action")
+
+        if action_value:
+            # action 값에 따라 다른 조치를 취할 수 있습니다.
+            if "/Book/BookPrice.asp" in action_value:
+                # /Book/BookPrice.asp에 대한 처리
+                return False
+            elif "/Book/BookDelivery.asp" in action_value:
+                # BookDelivery.asp에 대한 처리   
+                return True 
+            else:
+                return False
+        else:
+            return False
+    else:
+        return False
+
 
 # 로그인 페이지 열기
 driver.get('https://ticket.interpark.com/Gate/TPLogin.asp?CPage=B&MN=Y&tid1=main_gnb&tid2=right_top&tid3=login&tid4=login')
@@ -123,7 +174,7 @@ while True:
                 num_seats = 0
 
             # '2'를 포함하는 텍스트를 발견한 경우 해당 좌석 클릭
-            if num_seats >= 2:
+            if num_seats >= wanted_seats_count:
                 print("\n자동 배정 진행!")
                 available_seat.click()
                 find_seat = True
@@ -135,7 +186,7 @@ while True:
         # driver.switch_to.default_content()
         driver.refresh()
         # time.sleep(1)
-        random_sleep_time = random.uniform(0.2, 1.0)
+        random_sleep_time = random.uniform(0.111, 0.222)
         time.sleep(random_sleep_time)        
         continue
     
@@ -163,16 +214,16 @@ while True:
     select_object = Select(select_element)
 
     # "2매" 선택 (옵션 값 "2" 사용)
-    select_object.select_by_value("2")
+    select_object.select_by_value(f"{wanted_seats_count}")
 
     # iframe_bookstep 작업 완료 후, 메인 페이지로 다시 전환
     driver.switch_to.default_content()
 
-    # 'SmallNextBtnLink' ID를 가진 <a> 요소 찾기
-    # next_button = driver.find_element(By.ID, "SmallNextBtnImage")
-    next_button = driver.find_element(By.XPATH, "//img[@src='//ticketimage.interpark.com/TicketImage/onestop/btn_next_02_on.gif']")
-
-    # 버튼 클릭
+    # 다음 버튼 클릭
+    # 'SmallNextBtnLink' ID를 가진 <a> 요소 찾기 (다음 버튼)
+    WebDriverWait(driver, wait_sec).until(EC.presence_of_element_located((By.ID, "SmallNextBtnImage")))
+    # next_button = driver.find_element(By.XPATH, "//img[@src='//ticketimage.interpark.com/TicketImage/onestop/btn_next_02_on.gif']")
+    next_button = driver.find_element(By.ID, "SmallNextBtnImage")
     next_button.click()
 
     # 약관 동의
@@ -193,25 +244,42 @@ while True:
     # 저장 버튼 클릭
     save_button.click()
 
+    # iframe 나오기.
     driver.switch_to.default_content()
 
-    # 다음 버튼 찾기2 (src 속성을 기반으로)
-    next_button2 = driver.find_element(By.XPATH, "//img[@src='//ticketimage.interpark.com/TicketImage/onestop/btn_next_02_on.gif']")
-
-    # 다음 버튼 클릭2
-    next_button2.click()
+    # 다음 버튼 클릭 (src 속성을 기반으로)
+    WebDriverWait(driver, wait_sec).until(EC.presence_of_element_located((By.ID, "SmallNextBtnImage")))
+    # next_button = driver.find_element(By.XPATH, "//img[@src='//ticketimage.interpark.com/TicketImage/onestop/btn_next_02_on.gif']")
+    next_button = driver.find_element(By.ID, "SmallNextBtnImage")    
+    next_button.click()
 
     # 경고창 처리
-    try:
-        WebDriverWait(driver, wait_sec).until(EC.alert_is_present())
-        alert = driver.switch_to.alert
-        alert_text = alert.text  # 경고창의 내용을 가져옴
-        print("경고창 내용:", alert_text)
-        alert.accept()  # "확인" 버튼 클릭
-        find_seat = False
+    while True:
+        # 경고창 없으면 반복
+        if alert_check():
+            find_seat = False
+            break
+        if book_Delivery_check():
+            find_seat = True
+            break
+        print('로딩 중...')
+        time.sleep(0.2)
+    
+    if not find_seat:
         continue
-    except TimeoutException:
-        print("경고창이 없습니다.")
+    else:
+        print("자리 차지 완료!")
+
+    # try:
+    #     WebDriverWait(driver, wait_sec).until(EC.alert_is_present())
+    #     alert = driver.switch_to.alert
+    #     alert_text = alert.text  # 경고창의 내용을 가져옴
+    #     print("경고창 내용:", alert_text)
+    #     alert.accept()  # "확인" 버튼 클릭
+    #     find_seat = False
+    #     continue
+    # except TimeoutException:
+    #     print("경고창이 없습니다.")
 
     ## 생년월일 입력.
     print("생년월일 입력")
@@ -225,48 +293,49 @@ while True:
     input_element = driver.find_element(By.ID, "YYMMDD")
 
     # 숫자 입력
-    input_element.send_keys("921222")    
+    input_element.send_keys(birth_date)    
 
     # iframe 나오기
     driver.switch_to.default_content()
 
     # 다음 버튼 누르기
     WebDriverWait(driver, wait_sec).until(EC.presence_of_element_located((By.ID, "SmallNextBtnImage")))
-    next_button3 = driver.find_element(By.ID, "SmallNextBtnImage")
-    next_button3.click()
+    next_button = driver.find_element(By.ID, "SmallNextBtnImage")
+    next_button.click()
 
 
-    ## 무통장 입금
-    print("무통장 입금")
+    ## 결제 선택
+    print("카카오페이 선택")
     # iframe으로 전환
     WebDriverWait(driver, wait_sec).until(EC.presence_of_element_located((By.ID, "ifrmBookStep")))
     iframe_bookstep = driver.find_element(By.ID, "ifrmBookStep")
     driver.switch_to.frame(iframe_bookstep)
 
-    # "무통장입금" 라벨을 가진 라디오 버튼 찾기
-    bank_transfer_radio = driver.find_element(By.XPATH, "//label[contains(text(), '무통장입금')]/preceding-sibling::input[@type='radio']")
+    # "카카오" 라벨을 가진 라디오 버튼 찾기
+    WebDriverWait(driver, wait_sec).until(EC.presence_of_element_located((By.XPATH, "//label[contains(text(), '카카오')]/preceding-sibling::input[@type='radio']")))
+    bank_transfer_radio = driver.find_element(By.XPATH, "//label[contains(text(), '카카오')]/preceding-sibling::input[@type='radio']")
 
     # 라디오 버튼 클릭
     bank_transfer_radio.click()  
 
-    # 은행 선택
-    print("은행 선택")
-    # 'BankCode' ID를 가진 <select> 요소 찾기
-    select_element = driver.find_element(By.ID, "BankCode")
+    # # 은행 선택
+    # print("은행 선택")
+    # # 'BankCode' ID를 가진 <select> 요소 찾기
+    # select_element = driver.find_element(By.ID, "BankCode")
 
-    # Select 객체 생성
-    select_object = Select(select_element)
+    # # Select 객체 생성
+    # select_object = Select(select_element)
 
-    # "국민은행" 선택 (옵션 값 "38051" 사용)
-    select_object.select_by_value("38051")
+    # # "국민은행" 선택 (옵션 값 "38051" 사용)
+    # select_object.select_by_value("38051")
 
     # iframe 나오기
     driver.switch_to.default_content()
     
     # 다음 버튼 누르기
     WebDriverWait(driver, wait_sec).until(EC.presence_of_element_located((By.ID, "SmallNextBtnImage")))
-    next_button3 = driver.find_element(By.ID, "SmallNextBtnImage")
-    next_button3.click()    
+    next_button = driver.find_element(By.ID, "SmallNextBtnImage")
+    next_button.click()    
 
 
     ## 결제하기
@@ -288,8 +357,42 @@ while True:
     # 결제하기 버튼 누르기
     print("결제하기 버튼 누름.")
     WebDriverWait(driver, wait_sec).until(EC.presence_of_element_located((By.ID, "LargeNextBtnImage")))
-    next_button3 = driver.find_element(By.ID, "LargeNextBtnImage")
-    next_button3.click()    
+    pay_button = driver.find_element(By.ID, "LargeNextBtnImage")
+    pay_button.click()    
+
+    # 카카오 페이 창 전환
+    # 새 창이나 탭이 열릴 때까지 기다림
+    WebDriverWait(driver, wait_sec).until(lambda d: len(d.window_handles) > 2)
+    window_handles = driver.window_handles
+    driver.switch_to.window(window_handles[2])
+
+    # 카톡결제 누르기
+    # iframe으로 전환
+    WebDriverWait(driver, wait_sec).until(EC.presence_of_element_located((By.ID, "kakaoiframe")))
+    iframe_bookstep = driver.find_element(By.ID, "kakaoiframe")
+    driver.switch_to.frame(iframe_bookstep)    
+    
+    # 카톡결제 클릭
+    WebDriverWait(driver, wait_sec).until(EC.presence_of_element_located((By.XPATH, "//button[contains(@class, 'kakaotalk')]")))
+    kakaotalk_btn = driver.find_element(By.XPATH, "//button[contains(@class, 'kakaotalk')]")
+    # kakaotalk_btn = driver.find_element(By.XPATH, "//button[contains(@class, 'button-menu') and contains(@class, 'kakaotalk')]")
+    kakaotalk_btn.click()
+
+    # 휴대폰 번호 입력.
+    WebDriverWait(driver, wait_sec).until(EC.presence_of_element_located((By.ID, "userPhone")))
+    input_element = driver.find_element(By.ID, 'userPhone')
+    input_element.send_keys(kakao_phone_number)
+
+    # 생년월일 입력.
+    WebDriverWait(driver, wait_sec).until(EC.presence_of_element_located((By.ID, "userBirth")))
+    input_element = driver.find_element(By.ID, 'userBirth')
+    input_element.send_keys(kakao_birth_date)
+
+    # <button class="button-request btn_payask on">결제요청</button>
+    # 결제요청 클릭
+    WebDriverWait(driver, wait_sec).until(EC.presence_of_element_located((By.XPATH, "//button[contains(@class, 'btn_payask') and contains(@class, 'on')]")))
+    pay_request_btn = driver.find_element(By.XPATH, "//button[contains(@class, 'btn_payask') and contains(@class, 'on')]")
+    pay_request_btn.click()
 
     break
 
